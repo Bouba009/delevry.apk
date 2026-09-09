@@ -1,0 +1,2096 @@
+
+name: Build Android Native APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Generate Project & Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Scaffold Android Native Project
+        run: |
+          set -e
+          echo "=== 1. Creating Folder Structure ==="
+          mkdir -p app/src/main/java/com/elaffroun/delivery/data
+          mkdir -p app/src/main/java/com/elaffroun/delivery/ui/components
+          mkdir -p app/src/main/java/com/elaffroun/delivery/ui/screens
+          mkdir -p app/src/main/java/com/elaffroun/delivery/ui/theme
+          mkdir -p app/src/main/res/values
+
+          echo "=== 2. Generating Gradle & Project Root Configurations ==="
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+                  maven { url = java.net.URI("https://jitpack.io") }
+              }
+          }
+          rootProject.name = "ElaffrounDelivery"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.3.2" apply false
+              id("org.jetbrains.kotlin.android") version "1.9.23" apply false
+              id("com.google.gms.google-services") version "4.4.1" apply false
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          android.nonTransitiveRClass=true
+          kotlin.code.style=official
+          EOF
+
+          cat << 'EOF' > app/proguard-rules.pro
+          -keepattributes *Annotation*
+          -keepclassmembers class * {
+              @com.google.firebase.firestore.PropertyName <fields>;
+              @com.google.firebase.firestore.PropertyName <methods>;
+          }
+          -keep class com.elaffroun.delivery.data.** { *; }
+          -keep class org.osmdroid.** { *; }
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("com.google.gms.google-services")
+          }
+
+          android {
+              namespace = "com.elaffroun.delivery"
+              compileSdk = 34
+
+              defaultConfig {
+                  applicationId = "com.elaffroun.delivery"
+                  minSdk = 24
+                  targetSdk = 34
+                  versionCode = 1
+                  versionName = "3.0.0"
+                  testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+                  vectorDrawables {
+                      useSupportLibrary = true
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      isMinifyEnabled = true
+                      isShrinkResources = true
+                      proguardFiles(
+                          getDefaultProguardFile("proguard-android-optimize.txt"),
+                          "proguard-rules.pro"
+                      )
+                  }
+                  debug {
+                      isMinifyEnabled = false
+                  }
+              }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+              buildFeatures {
+                  compose = true
+                  buildConfig = true
+              }
+              composeOptions {
+                  kotlinCompilerExtensionVersion = "1.5.11"
+              }
+              packaging {
+                  resources {
+                      excludes += "/META-INF/{AL2.0,LGPL2.1}"
+                  }
+              }
+          }
+
+          dependencies {
+              val composeBom = platform("androidx.compose:compose-bom:2024.04.01")
+              implementation(composeBom)
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.navigation:navigation-compose:2.7.7")
+              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+
+              implementation(platform("com.google.firebase:firebase-bom:32.8.1"))
+              implementation("com.google.firebase:firebase-auth-ktx")
+              implementation("com.google.firebase:firebase-firestore-ktx")
+
+              implementation("org.osmdroid:osmdroid-android:6.1.18")
+              implementation("io.coil-kt:coil-compose:2.6.0")
+              implementation("com.google.android.gms:play-services-location:21.2.0")
+              implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.0")
+          }
+          EOF
+
+          echo "=== 3. Generating Firebase Google Services Config ==="
+          cat << 'EOF' > app/google-services.json
+          {
+            "project_info": {
+              "project_number": "703541527613",
+              "project_id": "filahadz-31183",
+              "storage_bucket": "filahadz-31183.firebasestorage.app"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:703541527613:android:7d3af803ba09c894d4d654",
+                  "android_client_info": {
+                    "package_name": "com.elaffroun.delivery"
+                  }
+                },
+                "oauth_client": [],
+                "api_key": [
+                  {
+                    "current_key": "AIzaSyDXdDA6rH50zAv5pmZKRkXnqosoFnC3GjY"
+                  }
+                ],
+                "services": {
+                  "appinvite_service": {
+                    "other_platform_oauth_client": []
+                  }
+                }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+          echo "=== 4. Generating Manifest & Resources ==="
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+
+              <application
+                  android:name=".ElaffrounApp"
+                  android:allowBackup="true"
+                  android:icon="@android:drawable/sym_def_app_icon"
+                  android:label="العفرون ديليفري"
+                  android:roundIcon="@android:drawable/sym_def_app_icon"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.ElaffrounDelivery">
+                  
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="portrait"
+                      android:windowSoftInputMode="adjustResize">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <resources>
+              <string name="app_name">العفرون ديليفري</string>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/themes.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.ElaffrounDelivery" parent="android:Theme.Material.Light.NoActionBar">
+                  <item name="android:statusBarColor">#FF7E00</item>
+                  <item name="android:navigationBarColor">#0D0D11</item>
+              </style>
+          </resources>
+          EOF
+
+          echo "=== 5. Writing Kotlin Source Code ==="
+
+          # ElaffrounApp.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ElaffrounApp.kt
+          package com.elaffroun.delivery
+
+          import android.app.Application
+          import com.google.firebase.FirebaseApp
+
+          class ElaffrounApp : Application() {
+              override fun onCreate() {
+                  super.onCreate()
+                  FirebaseApp.initializeApp(this)
+              }
+          }
+          EOF
+
+          # Color.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/theme/Color.kt
+          package com.elaffroun.delivery.ui.theme
+
+          import androidx.compose.ui.graphics.Color
+
+          val PrimaryOrange = Color(0xFFFF7E00)
+          val PrimaryOrangeDark = Color(0xFFE06B00)
+          val DarkBackground = Color(0xFF0D0D11)
+          val DarkSurface = Color(0xFF16161E)
+          val LightBackground = Color(0xFFF8FAFC)
+          val LightSurface = Color(0xFFFFFFFF)
+          EOF
+
+          # Models.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/data/Models.kt
+          package com.elaffroun.delivery.data
+
+          import androidx.annotation.Keep
+          import com.google.firebase.firestore.PropertyName
+
+          @Keep
+          data class User(
+              @get:PropertyName("uid") @set:PropertyName("uid") var uid: String = "",
+              @get:PropertyName("name") @set:PropertyName("name") var name: String = "",
+              @get:PropertyName("email") @set:PropertyName("email") var email: String = "",
+              @get:PropertyName("role") @set:PropertyName("role") var role: String = "customer",
+              @get:PropertyName("phoneNumber") @set:PropertyName("phoneNumber") var phoneNumber: String = "",
+              @get:PropertyName("avatarUrl") @set:PropertyName("avatarUrl") var avatarUrl: String = "",
+              @get:PropertyName("blocked") @set:PropertyName("blocked") var blocked: Boolean = false,
+              @get:PropertyName("blockedReason") @set:PropertyName("blockedReason") var blockedReason: String = "",
+              @get:PropertyName("suspendedUntil") @set:PropertyName("suspendedUntil") var suspendedUntil: String? = null,
+              @get:PropertyName("approved") @set:PropertyName("approved") var approved: Boolean = true,
+              @get:PropertyName("debt") @set:PropertyName("debt") var debt: Double = 0.0,
+              @get:PropertyName("lat") @set:PropertyName("lat") var lat: Double? = null,
+              @get:PropertyName("lng") @set:PropertyName("lng") var lng: Double? = null,
+              @get:PropertyName("lastUpdated") @set:PropertyName("lastUpdated") var lastUpdated: String? = null,
+              @get:PropertyName("createdAt") @set:PropertyName("createdAt") var createdAt: String = ""
+          )
+
+          @Keep
+          data class Store(
+              var id: String = "",
+              @get:PropertyName("name") @set:PropertyName("name") var name: String = "",
+              @get:PropertyName("lat") @set:PropertyName("lat") var lat: Double = 36.4686,
+              @get:PropertyName("lng") @set:PropertyName("lng") var lng: Double = 2.6288
+          )
+
+          @Keep
+          data class OrderItem(
+              @get:PropertyName("name") @set:PropertyName("name") var name: String = "",
+              @get:PropertyName("qty") @set:PropertyName("qty") var qty: Int = 1
+          )
+
+          @Keep
+          data class Order(
+              var id: String = "",
+              @get:PropertyName("restaurant") @set:PropertyName("restaurant") var restaurant: String = "",
+              @get:PropertyName("restaurantAddress") @set:PropertyName("restaurantAddress") var restaurantAddress: String = "",
+              @get:PropertyName("storeLat") @set:PropertyName("storeLat") var storeLat: Double = 0.0,
+              @get:PropertyName("storeLng") @set:PropertyName("storeLng") var storeLng: Double = 0.0,
+              @get:PropertyName("customerAddress") @set:PropertyName("customerAddress") var customerAddress: String = "",
+              @get:PropertyName("price") @set:PropertyName("price") var price: Int = 0,
+              @get:PropertyName("items") @set:PropertyName("items") var items: List<OrderItem> = emptyList(),
+              @get:PropertyName("note") @set:PropertyName("note") var note: String = "",
+              @get:PropertyName("lat") @set:PropertyName("lat") var lat: Double = 0.0,
+              @get:PropertyName("lng") @set:PropertyName("lng") var lng: Double = 0.0,
+              @get:PropertyName("customerId") @set:PropertyName("customerId") var customerId: String = "",
+              @get:PropertyName("customerName") @set:PropertyName("customerName") var customerName: String = "",
+              @get:PropertyName("customerPhone") @set:PropertyName("customerPhone") var customerPhone: String = "",
+              @get:PropertyName("driverId") @set:PropertyName("driverId") var driverId: String = "",
+              @get:PropertyName("driverName") @set:PropertyName("driverName") var driverName: String = "",
+              @get:PropertyName("driverPhone") @set:PropertyName("driverPhone") var driverPhone: String = "",
+              @get:PropertyName("status") @set:PropertyName("status") var status: String = "pending",
+              @get:PropertyName("createdAt") @set:PropertyName("createdAt") var createdAt: String = ""
+          )
+
+          @Keep
+          data class ChatMessage(
+              var id: String = "",
+              @get:PropertyName("sender") @set:PropertyName("sender") var sender: String = "",
+              @get:PropertyName("text") @set:PropertyName("text") var text: String = "",
+              @get:PropertyName("sentAt") @set:PropertyName("sentAt") var sentAt: String = ""
+          )
+          EOF
+
+          # AudioAlertManager.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/data/AudioAlertManager.kt
+          package com.elaffroun.delivery.data
+
+          import android.content.Context
+          import android.media.AudioManager
+          import android.media.ToneGenerator
+          import android.os.Build
+          import android.os.VibrationEffect
+          import android.os.Vibrator
+          import android.os.VibratorManager
+          import kotlinx.coroutines.*
+
+          class AudioAlertManager(private val context: Context) {
+              private var toneGenerator: ToneGenerator? = null
+              private var ringtoneJob: Job? = null
+              private val vibrator: Vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                  val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+                  vibratorManager.defaultVibrator
+              } else {
+                  @Suppress("DEPRECATION")
+                  context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+              }
+
+              init {
+                  try {
+                      toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 85)
+                  } catch (e: Exception) {
+                      e.printStackTrace()
+                  }
+              }
+
+              fun startDriverOrderRingtone(scope: CoroutineScope) {
+                  stopDriverOrderRingtone()
+                  ringtoneJob = scope.launch(Dispatchers.Default) {
+                      while (isActive) {
+                          toneGenerator?.startTone(ToneGenerator.TONE_CDMA_HIGH_L, 300)
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              vibrator.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
+                          } else {
+                              @Suppress("DEPRECATION")
+                              vibrator.vibrate(300)
+                          }
+                          delay(1200)
+                      }
+                  }
+              }
+
+              fun stopDriverOrderRingtone() {
+                  ringtoneJob?.cancel()
+                  ringtoneJob = null
+                  toneGenerator?.stopTone()
+              }
+
+              fun playArrivalProximityAlert() {
+                  toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 450)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 250, 150, 250), -1))
+                  } else {
+                      @Suppress("DEPRECATION")
+                      vibrator.vibrate(450)
+                  }
+              }
+
+              fun release() {
+                  stopDriverOrderRingtone()
+                  toneGenerator?.release()
+                  toneGenerator = null
+              }
+          }
+          EOF
+
+          # Repository.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/data/Repository.kt
+          package com.elaffroun.delivery.data
+
+          import com.google.firebase.auth.FirebaseAuth
+          import com.google.firebase.firestore.FirebaseFirestore
+          import com.google.firebase.firestore.Query
+          import kotlinx.coroutines.channels.awaitClose
+          import kotlinx.coroutines.flow.Flow
+          import kotlinx.coroutines.flow.callbackFlow
+          import kotlinx.coroutines.tasks.await
+          import java.security.MessageDigest
+          import java.text.SimpleDateFormat
+          import java.util.*
+          import kotlin.math.*
+
+          class Repository {
+              val auth: FirebaseAuth = FirebaseAuth.getInstance()
+              val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
+
+              val currentUid: String? get() = auth.currentUser?.uid
+
+              fun calculateDistanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+                  val r = 6371.0
+                  val dLat = Math.toRadians(lat2 - lat1)
+                  val dLon = Math.toRadians(lon2 - lon1)
+                  val a = sin(dLat / 2).pow(2) +
+                          cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
+                          sin(dLon / 2).pow(2)
+                  val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                  return r * c
+              }
+
+              fun calculateDeliveryPrice(distanceKm: Double): Int {
+                  val blocks = ceil(distanceKm / 0.5).toInt()
+                  val fee = blocks * 50
+                  return if (fee < 50) 50 else fee
+              }
+
+              fun observeCurrentUser(uid: String): Flow<User?> = callbackFlow {
+                  val listener = firestore.collection("users").document(uid)
+                      .addSnapshotListener { snapshot, error ->
+                          if (error != null) {
+                              trySend(null)
+                              return@addSnapshotListener
+                          }
+                          val user = snapshot?.toObject(User::class.java)
+                          trySend(user)
+                      }
+                  awaitClose { listener.remove() }
+              }
+
+              fun observeStores(): Flow<List<Store>> = callbackFlow {
+                  val listener = firestore.collection("stores")
+                      .addSnapshotListener { snapshot, error ->
+                          if (error != null || snapshot == null) {
+                              trySend(emptyList())
+                              return@addSnapshotListener
+                          }
+                          val stores = snapshot.documents.mapNotNull {
+                              it.toObject(Store::class.java)?.apply { id = it.id }
+                          }
+                          trySend(stores)
+                      }
+                  awaitClose { listener.remove() }
+              }
+
+              fun observeActiveDrivers(): Flow<List<User>> = callbackFlow {
+                  val listener = firestore.collection("users")
+                      .whereEqualTo("role", "driver")
+                      .whereEqualTo("approved", true)
+                      .addSnapshotListener { snapshot, _ ->
+                          val drivers = snapshot?.documents?.mapNotNull { it.toObject(User::class.java) } ?: emptyList()
+                          trySend(drivers)
+                      }
+                  awaitClose { listener.remove() }
+              }
+
+              fun observeCustomerActiveOrders(customerId: String): Flow<Order?> = callbackFlow {
+                  val listener = firestore.collection("orders")
+                      .whereEqualTo("customerId", customerId)
+                      .addSnapshotListener { snapshot, _ ->
+                          val active = snapshot?.documents
+                              ?.mapNotNull { it.toObject(Order::class.java)?.apply { id = it.id } }
+                              ?.firstOrNull { it.status in listOf("pending", "accepted", "to_store", "received", "delivered") }
+                          trySend(active)
+                      }
+                  awaitClose { listener.remove() }
+              }
+
+              fun observePendingOrders(): Flow<List<Order>> = callbackFlow {
+                  val listener = firestore.collection("orders")
+                      .whereEqualTo("status", "pending")
+                      .addSnapshotListener { snapshot, _ ->
+                          val list = snapshot?.documents?.mapNotNull { it.toObject(Order::class.java)?.apply { id = it.id } } ?: emptyList()
+                          trySend(list)
+                      }
+                  awaitClose { listener.remove() }
+              }
+
+              fun observeDriverAssignedOrder(driverId: String): Flow<Order?> = callbackFlow {
+                  val listener = firestore.collection("orders")
+                      .whereEqualTo("driverId", driverId)
+                      .addSnapshotListener { snapshot, _ ->
+                          val current = snapshot?.documents
+                              ?.mapNotNull { it.toObject(Order::class.java)?.apply { id = it.id } }
+                              ?.firstOrNull { it.status in listOf("accepted", "to_store", "received") }
+                          trySend(current)
+                      }
+                  awaitClose { listener.remove() }
+              }
+
+              fun observeChatMessages(orderId: String): Flow<List<ChatMessage>> = callbackFlow {
+                  val listener = firestore.collection("orders").document(orderId)
+                      .collection("messages")
+                      .orderBy("sentAt", Query.Direction.ASCENDING)
+                      .addSnapshotListener { snapshot, _ ->
+                          val msgs = snapshot?.documents?.mapNotNull { it.toObject(ChatMessage::class.java)?.apply { id = it.id } } ?: emptyList()
+                          trySend(msgs)
+                      }
+                  awaitClose { listener.remove() }
+              }
+
+              suspend fun sendMessage(orderId: String, text: String, senderRole: String) {
+                  val msg = hashMapOf(
+                      "sender" to senderRole,
+                      "text" to text,
+                      "sentAt" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+                  )
+                  firestore.collection("orders").document(orderId).collection("messages").add(msg).await()
+              }
+
+              suspend fun updateDriverLocation(driverUid: String, lat: Double, lng: Double) {
+                  firestore.collection("users").document(driverUid).update(
+                      mapOf(
+                          "lat" to lat,
+                          "lng" to lng,
+                          "lastUpdated" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+                      )
+                  ).await()
+              }
+
+              suspend fun submitReport(reporterUid: String, targetUid: String, orderId: String, reason: String) {
+                  val reportId = "${targetUid}_${reporterUid}"
+                  val report = hashMapOf(
+                      "reporterUid" to reporterUid,
+                      "targetUid" to targetUid,
+                      "orderId" to orderId,
+                      "reason" to reason,
+                      "createdAt" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+                  )
+                  firestore.collection("reports").document(reportId).set(report).await()
+
+                  val reportsSnap = firestore.collection("reports").whereEqualTo("targetUid", targetUid).get().await()
+                  val uniqueReporters = reportsSnap.documents.mapNotNull { it.getString("reporterUid") }.toSet()
+                  if (uniqueReporters.size >= 5) {
+                      val cal = Calendar.getInstance()
+                      cal.add(Calendar.DAY_OF_YEAR, 1)
+                      val suspendDateStr = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(cal.time)
+
+                      firestore.collection("users").document(targetUid).update(
+                          mapOf(
+                              "blocked" to true,
+                              "blockedReason" to "community_standards",
+                              "suspendedUntil" to suspendDateStr
+                          )
+                      ).await()
+                  }
+              }
+
+              fun verifyAdminPassword(password: String): Boolean {
+                  val bytes = password.toByteArray()
+                  val md = MessageDigest.getInstance("SHA-256")
+                  val digest = md.digest(bytes)
+                  val hash = digest.fold("") { str, it -> str + "%02x".format(it) }
+                  val b64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                  return hash == "74df6db14902c3eb4615a5f1ba8e26bc2a8315276137d3af803ba09c894d4d65" || b64 == "YWJvYm9iMTIz"
+              }
+          }
+          EOF
+
+          # OsmMapView.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/components/OsmMapView.kt
+          package com.elaffroun.delivery.ui.components
+
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.viewinterop.AndroidView
+          import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+          import org.osmdroid.util.GeoPoint
+          import org.osmdroid.views.MapView
+          import org.osmdroid.views.overlay.Marker
+          import org.osmdroid.views.overlay.Polyline
+
+          @Composable
+          fun OsmMapView(
+              modifier: Modifier = Modifier,
+              center: GeoPoint = GeoPoint(36.4686, 2.6288),
+              zoom: Double = 14.5,
+              markers: List<MapMarkerData> = emptyList(),
+              routePoints: List<GeoPoint> = emptyList()
+          ) {
+              var mapViewInstance by remember { mutableStateOf<MapView?>(null) }
+
+              AndroidView(
+                  modifier = modifier,
+                  factory = { ctx ->
+                      MapView(ctx).apply {
+                          setTileSource(TileSourceFactory.MAPNIK)
+                          setMultiTouchControls(true)
+                          controller.setZoom(zoom)
+                          controller.setCenter(center)
+                          mapViewInstance = this
+                      }
+                  },
+                  update = { mapView ->
+                      mapView.overlays.removeAll { it is Marker || it is Polyline }
+
+                      if (routePoints.isNotEmpty()) {
+                          val polyline = Polyline().apply {
+                              setPoints(routePoints)
+                              outlinePaint.color = android.graphics.Color.parseColor("#FF7E00")
+                              outlinePaint.strokeWidth = 10f
+                          }
+                          mapView.overlays.add(polyline)
+                      }
+
+                      markers.forEach { data ->
+                          val marker = Marker(mapView).apply {
+                              position = data.point
+                              title = data.title
+                              setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                          }
+                          mapView.overlays.add(marker)
+                      }
+                      mapView.invalidate()
+                  }
+              )
+
+              DisposableEffect(Unit) {
+                  onDispose {
+                      mapViewInstance?.onDetach()
+                  }
+              }
+          }
+
+          data class MapMarkerData(
+              val point: GeoPoint,
+              val title: String,
+              val iconType: String = "customer"
+          )
+          EOF
+
+          # ChatBottomSheet.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/screens/ChatBottomSheet.kt
+          package com.elaffroun.delivery.ui.screens
+
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Send
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import com.elaffroun.delivery.data.Repository
+          import com.elaffroun.delivery.ui.theme.PrimaryOrange
+          import kotlinx.coroutines.launch
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun ChatBottomSheet(
+              orderId: String,
+              userRole: String,
+              repository: Repository,
+              onDismiss: () -> Unit
+          ) {
+              val messages by repository.observeChatMessages(orderId).collectAsState(initial = emptyList())
+              var inputText by remember { mutableStateOf("") }
+              val scope = rememberCoroutineScope()
+
+              ModalBottomSheet(onDismissRequest = onDismiss) {
+                  Column(
+                      modifier = Modifier
+                          .fillMaxWidth()
+                          .height(420.dp)
+                          .padding(16.dp)
+                  ) {
+                      Text("محادثة الطلب المباشرة", style = MaterialTheme.typography.titleMedium)
+                      Spacer(modifier = Modifier.height(8.dp))
+
+                      LazyColumn(
+                          modifier = Modifier
+                              .weight(1f)
+                              .fillMaxWidth(),
+                          reverseLayout = false
+                      ) {
+                          items(messages) { msg ->
+                              val isMe = msg.sender == userRole
+                              Box(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
+                              ) {
+                                  Box(
+                                      modifier = Modifier
+                                          .padding(vertical = 4.dp)
+                                          .background(
+                                              if (isMe) PrimaryOrange else Color.Gray.copy(alpha = 0.3f),
+                                              shape = RoundedCornerShape(12.dp)
+                                          )
+                                          .padding(horizontal = 12.dp, vertical = 8.dp)
+                                  ) {
+                                      Text(
+                                          text = msg.text,
+                                          color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface,
+                                          fontSize = 13.sp
+                                      )
+                                  }
+                              }
+                          }
+                      }
+
+                      Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          OutlinedTextField(
+                              value = inputText,
+                              onValueChange = { inputText = it },
+                              modifier = Modifier.weight(1f),
+                              placeholder = { Text("اكتب رسالة...") },
+                              shape = RoundedCornerShape(12.dp)
+                          )
+                          Spacer(modifier = Modifier.width(8.dp))
+                          IconButton(
+                              onClick = {
+                                  if (inputText.isNotBlank()) {
+                                      val txt = inputText
+                                      inputText = ""
+                                      scope.launch {
+                                          repository.sendMessage(orderId, txt, userRole)
+                                      }
+                                  }
+                              }
+                          ) {
+                              Icon(Icons.Default.Send, contentDescription = "Send", tint = PrimaryOrange)
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          # Dialogs.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/components/Dialogs.kt
+          package com.elaffroun.delivery.ui.components
+
+          import android.widget.Toast
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Add
+          import androidx.compose.material.icons.filled.Delete
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import com.elaffroun.delivery.data.OrderItem
+          import com.elaffroun.delivery.data.Repository
+          import com.elaffroun.delivery.ui.theme.PrimaryOrange
+          import kotlinx.coroutines.launch
+          import org.osmdroid.util.GeoPoint
+          import java.text.SimpleDateFormat
+          import java.util.*
+
+          @Composable
+          fun NewOrderDialog(
+              repository: Repository,
+              userLocation: GeoPoint,
+              onDismiss: () -> Unit
+          ) {
+              val context = LocalContext.current
+              val scope = rememberCoroutineScope()
+              val stores by repository.observeStores().collectAsState(initial = emptyList())
+
+              var selectedStoreName by remember { mutableStateOf("") }
+              var selectedStoreLat by remember { mutableStateOf(36.4686) }
+              var selectedStoreLng by remember { mutableStateOf(2.6288) }
+              var note by remember { mutableStateOf("") }
+              var address by remember { mutableStateOf("العفرون") }
+              var items by remember { mutableStateOf(listOf(OrderItem("وجبة 1", 1))) }
+
+              val distance = repository.calculateDistanceKm(selectedStoreLat, selectedStoreLng, userLocation.latitude, userLocation.longitude)
+              val price = repository.calculateDeliveryPrice(distance)
+
+              AlertDialog(
+                  onDismissRequest = onDismiss,
+                  title = { Text("إنشاء طلب توصيل جديد", fontWeight = FontWeight.Black) },
+                  text = {
+                      Column(modifier = Modifier.fillMaxWidth()) {
+                          Text("المتجر أو المطعم:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                          if (stores.isNotEmpty()) {
+                              Row(modifier = Modifier.fillMaxWidth()) {
+                                  stores.take(3).forEach { st ->
+                                      FilterChip(
+                                          selected = selectedStoreName == st.name,
+                                          onClick = {
+                                              selectedStoreName = st.name
+                                              selectedStoreLat = st.lat
+                                              selectedStoreLng = st.lng
+                                          },
+                                          label = { Text(st.name, fontSize = 10.sp) },
+                                          modifier = Modifier.padding(2.dp)
+                                      )
+                                  }
+                              }
+                          }
+
+                          Spacer(modifier = Modifier.height(8.dp))
+                          OutlinedTextField(
+                              value = address,
+                              onValueChange = { address = it },
+                              label = { Text("عنوان التوصيل بالتفصيل") },
+                              modifier = Modifier.fillMaxWidth()
+                          )
+
+                          Spacer(modifier = Modifier.height(8.dp))
+                          Text("قائمة الطلبات:", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                          items.forEachIndexed { index, itm ->
+                              Row(verticalAlignment = Alignment.CenterVertically) {
+                                  OutlinedTextField(
+                                      value = itm.name,
+                                      onValueChange = { newName ->
+                                          items = items.toMutableList().also { it[index] = itm.copy(name = newName) }
+                                      },
+                                      modifier = Modifier.weight(1f),
+                                      label = { Text("اسم الوجبة") }
+                                  )
+                                  IconButton(onClick = {
+                                      if (items.size > 1) {
+                                          items = items.toMutableList().also { it.removeAt(index) }
+                                      }
+                                  }) {
+                                      Icon(Icons.Default.Delete, contentDescription = null)
+                                  }
+                              }
+                          }
+
+                          TextButton(onClick = { items = items + OrderItem("", 1) }) {
+                              Icon(Icons.Default.Add, contentDescription = null)
+                              Text("إضافة وجبة أخرى", fontSize = 11.sp)
+                          }
+
+                          Spacer(modifier = Modifier.height(8.dp))
+                          Text("سعر التوصيل المقدر: $price دج (المسافة: %.2f كم)".format(distance), fontWeight = FontWeight.Bold, color = PrimaryOrange)
+                      }
+                  },
+                  confirmButton = {
+                      Button(
+                          onClick = {
+                              if (selectedStoreName.isBlank() || address.isBlank()) {
+                                  Toast.makeText(context, "يرجى تحديد المتجر والعنوان", Toast.LENGTH_SHORT).show()
+                                  return@Button
+                              }
+                              scope.launch {
+                                  val uid = repository.currentUid ?: ""
+                                  val userDoc = repository.firestore.collection("users").document(uid).get()
+                                  val uName = userDoc.getString("name") ?: "زبون"
+                                  val uPhone = userDoc.getString("phoneNumber") ?: ""
+
+                                  val orderData = hashMapOf(
+                                      "restaurant" to selectedStoreName,
+                                      "restaurantAddress" to "$selectedStoreLat,$selectedStoreLng",
+                                      "storeLat" to selectedStoreLat,
+                                      "storeLng" to selectedStoreLng,
+                                      "customerAddress" to address,
+                                      "price" to price,
+                                      "items" to items.map { mapOf("name" to it.name, "qty" to it.qty) },
+                                      "note" to note,
+                                      "lat" to userLocation.latitude,
+                                      "lng" to userLocation.longitude,
+                                      "customerId" to uid,
+                                      "customerName" to uName,
+                                      "customerPhone" to uPhone,
+                                      "status" to "pending",
+                                      "createdAt" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+                                  )
+                                  repository.firestore.collection("orders").add(orderData)
+                                  onDismiss()
+                              }
+                          },
+                          colors = ButtonDefaults.buttonColors(containerColor = PrimaryOrange)
+                      ) {
+                          Text("إرسال الطلب")
+                      }
+                  },
+                  dismissButton = {
+                      TextButton(onClick = onDismiss) { Text("إلغاء") }
+                  }
+              )
+          }
+
+          @Composable
+          fun ReportDialog(
+              targetUid: String,
+              orderId: String,
+              repository: Repository,
+              onDismiss: () -> Unit
+          ) {
+              val context = LocalContext.current
+              val scope = rememberCoroutineScope()
+              var reason by remember { mutableStateOf("") }
+
+              AlertDialog(
+                  onDismissRequest = onDismiss,
+                  title = { Text("تقديم إبلاغ رسمي", fontWeight = FontWeight.Bold) },
+                  text = {
+                      Column {
+                          Text("يرجى توضيح سبب الإبلاغ بدقة:", fontSize = 12.sp)
+                          Spacer(modifier = Modifier.height(8.dp))
+                          OutlinedTextField(
+                              value = reason,
+                              onValueChange = { reason = it },
+                              label = { Text("التفاصيل") },
+                              modifier = Modifier.fillMaxWidth()
+                          )
+                      }
+                  },
+                  confirmButton = {
+                      Button(
+                          onClick = {
+                              if (reason.isNotBlank()) {
+                                  scope.launch {
+                                      repository.submitReport(
+                                          reporterUid = repository.currentUid ?: "",
+                                          targetUid = targetUid,
+                                          orderId = orderId,
+                                          reason = reason
+                                      )
+                                      Toast.makeText(context, "تم رفع البلاغ لمراجعة الإدارة", Toast.LENGTH_SHORT).show()
+                                      onDismiss()
+                                  }
+                              }
+                          },
+                          colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                      ) {
+                          Text("إرسال")
+                      }
+                  },
+                  dismissButton = {
+                      TextButton(onClick = onDismiss) { Text("إلغاء") }
+                  }
+              )
+          }
+
+          @Composable
+          fun BlockedScreen(reason: String, onLogout: () -> Unit) {
+              Column(
+                  modifier = Modifier.fillMaxSize().padding(24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+              ) {
+                  Text("⚠️ الحساب مجمد مؤقتاً", fontSize = 22.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.error)
+                  Spacer(modifier = Modifier.height(12.dp))
+                  Text(
+                      if (reason == "community_standards")
+                          "عزيزي المستخدم أنت لا تحترم معايير مجتمعنا وسياسة الاستخدام. حسابك مجمد إلى غاية مراجعة فريقنا حسابك والفصل في قضيتك."
+                      else
+                          "عذراً! تم تجميد حسابك لتجاوز حد الديون المسموح به (1000 دج). يرجى التواصل مع الإدارة لسداد الاشتراك.",
+                      fontSize = 13.sp,
+                      color = Color.Gray
+                  )
+                  Spacer(modifier = Modifier.height(24.dp))
+                  Button(onClick = onLogout) { Text("تسجيل الخروج والرجوع") }
+              }
+          }
+
+          @Composable
+          fun PendingApprovalScreen(onLogout: () -> Unit) {
+              Column(
+                  modifier = Modifier.fillMaxSize().padding(24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+              ) {
+                  Text("⏳ الحساب قيد المراجعة", fontSize = 22.sp, fontWeight = FontWeight.Black, color = PrimaryOrange)
+                  Spacer(modifier = Modifier.height(12.dp))
+                  Text("تم استلام طلب توظيفك بنجاح، وتقوم الإدارة حالياً بمراجعة معلوماتك الشخصية لتفعيل حسابك قريباً.", fontSize = 13.sp, color = Color.Gray)
+                  Spacer(modifier = Modifier.height(24.dp))
+                  Button(onClick = onLogout) { Text("تسجيل الخروج والرجوع") }
+              }
+          }
+          EOF
+
+          # Screens.kt (Combining Auth, Landing, Customer, Driver, and Admin Screens)
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/screens/Screens.kt
+          package com.elaffroun.delivery.ui.screens
+
+          import android.Manifest
+          import android.content.Intent
+          import android.net.Uri
+          import android.widget.Toast
+          import androidx.activity.compose.rememberLauncherForActivityResult
+          import androidx.activity.result.contract.ActivityResultContracts
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.shape.CircleShape
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.*
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.draw.clip
+          import androidx.compose.ui.graphics.Brush
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.platform.LocalContext
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.ui.text.input.PasswordVisualTransformation
+          import androidx.compose.ui.text.style.TextAlign
+          import androidx.compose.ui.unit.dp
+          import androidx.compose.ui.unit.sp
+          import coil.compose.AsyncImage
+          import com.elaffroun.delivery.data.*
+          import com.elaffroun.delivery.ui.components.*
+          import com.elaffroun.delivery.ui.theme.PrimaryOrange
+          import com.google.android.gms.location.LocationServices
+          import kotlinx.coroutines.launch
+          import org.osmdroid.util.GeoPoint
+          import java.text.SimpleDateFormat
+          import java.util.*
+
+          @Composable
+          fun LandingScreen(
+              onLoginClick: () -> Unit,
+              onRegisterClick: () -> Unit,
+              onAdminPortalClick: () -> Unit
+          ) {
+              Box(
+                  modifier = Modifier
+                      .fillMaxSize()
+                      .background(Brush.verticalGradient(listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5), Color.White))),
+                  contentAlignment = Alignment.Center
+              ) {
+                  Card(
+                      modifier = Modifier.fillMaxWidth(0.9f).padding(16.dp),
+                      shape = RoundedCornerShape(28.dp),
+                      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                      elevation = CardDefaults.cardElevation(8.dp)
+                  ) {
+                      Column(
+                          modifier = Modifier.fillMaxWidth().padding(24.dp),
+                          horizontalAlignment = Alignment.CenterHorizontally
+                      ) {
+                          AsyncImage(
+                              model = "https://st3.depositphotos.com/5572200/15094/v/450/depositphotos_150942812-stock-illustration-a-man-is-riding-a.jpg",
+                              contentDescription = "Logo",
+                              modifier = Modifier.size(100.dp).clip(CircleShape)
+                          )
+                          Spacer(modifier = Modifier.height(16.dp))
+                          Text("العفرون اونلاين ديليفري", fontSize = 24.sp, fontWeight = FontWeight.Black, color = PrimaryOrange)
+                          Spacer(modifier = Modifier.height(8.dp))
+                          Text(
+                              "المنصة الأحدث لتتبع وتوصيل طلباتك في العفرون وضواحيها بكل سلاسة، أمان، وسرعة حقيقية.",
+                              fontSize = 13.sp,
+                              textAlign = TextAlign.Center,
+                              color = Color.Gray,
+                              lineHeight = 18.sp
+                          )
+                          Spacer(modifier = Modifier.height(28.dp))
+                          Button(
+                              onClick = onLoginClick,
+                              modifier = Modifier.fillMaxWidth().height(52.dp),
+                              colors = ButtonDefaults.buttonColors(containerColor = PrimaryOrange),
+                              shape = RoundedCornerShape(16.dp)
+                          ) {
+                              Text("اطلب الآن (تسجيل دخول)", fontWeight = FontWeight.Bold)
+                          }
+                          Spacer(modifier = Modifier.height(12.dp))
+                          OutlinedButton(
+                              onClick = onRegisterClick,
+                              modifier = Modifier.fillMaxWidth().height(52.dp),
+                              shape = RoundedCornerShape(16.dp)
+                          ) {
+                              Text("إنشاء حساب جديد", fontWeight = FontWeight.Bold, color = PrimaryOrange)
+                          }
+                      }
+                  }
+
+                  IconButton(
+                      onClick = onAdminPortalClick,
+                      modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                  ) {
+                      Icon(Icons.Default.Lock, contentDescription = "Admin", tint = Color.LightGray)
+                  }
+              }
+          }
+
+          @Composable
+          fun AuthScreen(
+              initialMode: String,
+              repository: Repository,
+              onAuthSuccess: () -> Unit
+          ) {
+              val context = LocalContext.current
+              val scope = rememberCoroutineScope()
+              var isLogin by remember { mutableStateOf(initialMode == "login") }
+              var role by remember { mutableStateOf("customer") }
+
+              var name by remember { mutableStateOf("") }
+              var phone by remember { mutableStateOf("") }
+              var email by remember { mutableStateOf("") }
+              var password by remember { mutableStateOf("") }
+              var passwordConfirm by remember { mutableStateOf("") }
+              var termsCheck by remember { mutableStateOf(false) }
+              var ageCheck by remember { mutableStateOf(false) }
+              var isLoading by remember { mutableStateOf(false) }
+
+              Column(
+                  modifier = Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+              ) {
+                  Text(
+                      text = if (isLogin) "تسجيل الدخول" else if (role == "driver") "تسجيل عامل توصيل جديد" else "إنشاء حساب زبون",
+                      fontSize = 22.sp,
+                      fontWeight = FontWeight.Black,
+                      color = MaterialTheme.colorScheme.onBackground
+                  )
+                  Spacer(modifier = Modifier.height(20.dp))
+
+                  if (!isLogin) {
+                      Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
+                          FilterChip(selected = role == "customer", onClick = { role = "customer" }, label = { Text("زبون") })
+                          Spacer(modifier = Modifier.width(8.dp))
+                          FilterChip(selected = role == "driver", onClick = { role = "driver" }, label = { Text("عامل توصيل") })
+                      }
+                      Spacer(modifier = Modifier.height(12.dp))
+                      OutlinedTextField(
+                          value = name,
+                          onValueChange = { name = it },
+                          label = { Text("الاسم الكامل") },
+                          modifier = Modifier.fillMaxWidth(),
+                          shape = RoundedCornerShape(14.dp)
+                      )
+                      Spacer(modifier = Modifier.height(8.dp))
+                      OutlinedTextField(
+                          value = phone,
+                          onValueChange = { phone = it },
+                          label = { Text("رقم الهاتف (إلزامي)") },
+                          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                          modifier = Modifier.fillMaxWidth(),
+                          shape = RoundedCornerShape(14.dp)
+                      )
+                      Spacer(modifier = Modifier.height(8.dp))
+                  }
+
+                  OutlinedTextField(
+                      value = email,
+                      onValueChange = { email = it },
+                      label = { Text("البريد الإلكتروني") },
+                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                      modifier = Modifier.fillMaxWidth(),
+                      shape = RoundedCornerShape(14.dp)
+                  )
+                  Spacer(modifier = Modifier.height(8.dp))
+
+                  OutlinedTextField(
+                      value = password,
+                      onValueChange = { password = it },
+                      label = { Text("كلمة المرور") },
+                      visualTransformation = PasswordVisualTransformation(),
+                      modifier = Modifier.fillMaxWidth(),
+                      shape = RoundedCornerShape(14.dp)
+                  )
+
+                  if (!isLogin) {
+                      Spacer(modifier = Modifier.height(8.dp))
+                      OutlinedTextField(
+                          value = passwordConfirm,
+                          onValueChange = { passwordConfirm = it },
+                          label = { Text("تأكيد كلمة المرور") },
+                          visualTransformation = PasswordVisualTransformation(),
+                          modifier = Modifier.fillMaxWidth(),
+                          shape = RoundedCornerShape(14.dp)
+                      )
+                      Spacer(modifier = Modifier.height(12.dp))
+
+                      if (role == "driver") {
+                          Row(verticalAlignment = Alignment.CenterVertically) {
+                              Checkbox(checked = ageCheck, onCheckedChange = { ageCheck = it })
+                              Text("أصرح بأن سني يتجاوز 18 سنة بالكامل", fontSize = 11.sp)
+                          }
+                          Row(verticalAlignment = Alignment.CenterVertically) {
+                              Checkbox(checked = termsCheck, onCheckedChange = { termsCheck = it })
+                              Text("أوافق على سياسة العمل الصارمة وعمولة المنصة", fontSize = 11.sp)
+                          }
+                      } else {
+                          Row(verticalAlignment = Alignment.CenterVertically) {
+                              Checkbox(checked = termsCheck, onCheckedChange = { termsCheck = it })
+                              Text("أوافق بالكامل على شروط الاستخدام وسياسة التوصيل", fontSize = 12.sp)
+                          }
+                      }
+                  }
+
+                  Spacer(modifier = Modifier.height(20.dp))
+
+                  Button(
+                      onClick = {
+                          if (email.isBlank() || password.isBlank()) {
+                              Toast.makeText(context, "يرجى ملء جميع الحقول", Toast.LENGTH_SHORT).show()
+                              return@Button
+                          }
+                          if (!isLogin) {
+                              if (name.isBlank() || phone.isBlank()) {
+                                  Toast.makeText(context, "الاسم ورقم الهاتف مطلوبان", Toast.LENGTH_SHORT).show()
+                                  return@Button
+                              }
+                              if (password != passwordConfirm) {
+                                  Toast.makeText(context, "كلمتا المرور غير متطابقتين", Toast.LENGTH_SHORT).show()
+                                  return@Button
+                              }
+                              if (!termsCheck) {
+                                  Toast.makeText(context, "يجب الموافقة على الشروط", Toast.LENGTH_SHORT).show()
+                                  return@Button
+                              }
+                              if (role == "driver" && !ageCheck) {
+                                  Toast.makeText(context, "يجب تأكيد السن القانوني (+18)", Toast.LENGTH_SHORT).show()
+                                  return@Button
+                              }
+                          }
+
+                          isLoading = true
+                          scope.launch {
+                              try {
+                                  if (isLogin) {
+                                      repository.auth.signInWithEmailAndPassword(email, password)
+                                  } else {
+                                      val res = repository.auth.createUserWithEmailAndPassword(email, password)
+                                      val uid = res.user?.uid ?: ""
+                                      val newUser = User(
+                                          uid = uid,
+                                          name = name,
+                                          email = email,
+                                          role = role,
+                                          phoneNumber = phone,
+                                          approved = (role != "driver"),
+                                          createdAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
+                                      )
+                                      repository.firestore.collection("users").document(uid).set(newUser)
+                                  }
+                                  onAuthSuccess()
+                              } catch (e: Exception) {
+                                  Toast.makeText(context, "خطأ: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                              } finally {
+                                  isLoading = false
+                              }
+                          }
+                      },
+                      modifier = Modifier.fillMaxWidth().height(50.dp),
+                      colors = ButtonDefaults.buttonColors(containerColor = PrimaryOrange),
+                      shape = RoundedCornerShape(14.dp),
+                      enabled = !isLoading
+                  ) {
+                      if (isLoading) {
+                          CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
+                      } else {
+                          Text(if (isLogin) "دخول" else "تسجيل الحساب", fontWeight = FontWeight.Bold)
+                      }
+                  }
+
+                  Spacer(modifier = Modifier.height(16.dp))
+                  TextButton(onClick = { isLogin = !isLogin }) {
+                      Text(
+                          if (isLogin) "ليس لديك حساب؟ إنشاء حساب جديد" else "لديك حساب بالفعل؟ تسجيل دخول",
+                          color = PrimaryOrange,
+                          fontSize = 12.sp
+                      )
+                  }
+              }
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun CustomerScreen(
+              repository: Repository,
+              audioAlertManager: AudioAlertManager,
+              onLogout: () -> Unit
+          ) {
+              val context = LocalContext.current
+              val scope = rememberCoroutineScope()
+              val uid = repository.currentUid ?: ""
+
+              var customerGeoPoint by remember { mutableStateOf(GeoPoint(36.4686, 2.6288)) }
+              val activeOrder by repository.observeCustomerActiveOrders(uid).collectAsState(initial = null)
+              val activeDrivers by repository.observeActiveDrivers().collectAsState(initial = emptyList())
+
+              var showNewOrderModal by remember { mutableStateOf(false) }
+              var showChatSheet by remember { mutableStateOf(false) }
+              var showReportModal by remember { mutableStateOf(false) }
+
+              val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+              val permissionLauncher = rememberLauncherForActivityResult(
+                  ActivityResultContracts.RequestMultiplePermissions()
+              ) { perms ->
+                  if (perms[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+                      fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                          if (loc != null) {
+                              customerGeoPoint = GeoPoint(loc.latitude, loc.longitude)
+                          }
+                      }
+                  }
+              }
+
+              LaunchedEffect(Unit) {
+                  permissionLauncher.launch(
+                      arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                  )
+              }
+
+              LaunchedEffect(activeOrder) {
+                  val o = activeOrder
+                  if (o != null && o.driverId.isNotBlank()) {
+                      repository.firestore.collection("users").document(o.driverId)
+                          .addSnapshotListener { snap, _ ->
+                              val dLat = snap?.getDouble("lat")
+                              val dLng = snap?.getDouble("lng")
+                              if (dLat != null && dLng != null) {
+                                  val dist = repository.calculateDistanceKm(dLat, dLng, o.lat, o.lng)
+                                  if (dist <= 0.2) {
+                                      audioAlertManager.playArrivalProximityAlert()
+                                  }
+                              }
+                          }
+                  }
+              }
+
+              Scaffold(
+                  topBar = {
+                      TopAppBar(
+                          title = { Text("العفرون ديليفري", fontWeight = FontWeight.Black, fontSize = 16.sp) },
+                          actions = {
+                              IconButton(onClick = onLogout) {
+                                  Icon(Icons.Default.ExitToApp, contentDescription = "خروج", tint = Color.Red)
+                              }
+                          },
+                          colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                      )
+                  },
+                  floatingActionButton = {
+                      if (activeOrder == null) {
+                          ExtendedFloatingActionButton(
+                              onClick = { showNewOrderModal = true },
+                              containerColor = PrimaryOrange,
+                              contentColor = Color.White,
+                              icon = { Icon(Icons.Default.AddShoppingCart, contentDescription = null) },
+                              text = { Text("اطلب الآن", fontWeight = FontWeight.Bold) }
+                          )
+                      }
+                  }
+              ) { padding ->
+                  Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                      OsmMapView(
+                          modifier = Modifier.fillMaxSize(),
+                          center = customerGeoPoint,
+                          markers = activeDrivers.filter { it.lat != null && it.lng != null }.map {
+                              MapMarkerData(GeoPoint(it.lat!!, it.lng!!), it.name, "driver")
+                          } + listOf(MapMarkerData(customerGeoPoint, "موقعك الحالي", "customer"))
+                      )
+
+                      activeOrder?.let { order ->
+                          Card(
+                              modifier = Modifier.fillMaxWidth().padding(12.dp).align(Alignment.TopCenter),
+                              shape = RoundedCornerShape(16.dp),
+                              colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
+                              elevation = CardDefaults.cardElevation(8.dp)
+                          ) {
+                              Column(modifier = Modifier.padding(12.dp)) {
+                                  Row(
+                                      modifier = Modifier.fillMaxWidth(),
+                                      horizontalArrangement = Arrangement.SpaceBetween,
+                                      verticalAlignment = Alignment.CenterVertically
+                                  ) {
+                                      Text(
+                                          text = when (order.status) {
+                                              "pending" -> "⏳ جاري البحث عن عامل توصيل..."
+                                              "accepted" -> "✅ تم قبول طلبك: ${order.driverName}"
+                                              "to_store" -> "🏃 السائق متجه للمطعم..."
+                                              "received" -> "🛵 تم استلام طلبك وفي الطريق إليك"
+                                              "delivered" -> "🎉 تم التوصيل! يرجى تأكيد الاستلام"
+                                              else -> order.status
+                                          },
+                                          color = Color.White,
+                                          fontWeight = FontWeight.Bold,
+                                          fontSize = 12.sp
+                                      )
+                                      Text("#${order.id.takeLast(4)}", color = Color.LightGray, fontSize = 10.sp)
+                                  }
+
+                                  Spacer(modifier = Modifier.height(8.dp))
+
+                                  Row(
+                                      modifier = Modifier.fillMaxWidth(),
+                                      horizontalArrangement = Arrangement.End,
+                                      verticalAlignment = Alignment.CenterVertically
+                                  ) {
+                                      if (order.driverPhone.isNotBlank()) {
+                                          Button(
+                                              onClick = {
+                                                  val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${order.driverPhone}"))
+                                                  context.startActivity(intent)
+                                              },
+                                              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                              shape = RoundedCornerShape(10.dp),
+                                              contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                          ) {
+                                              Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp))
+                                              Spacer(modifier = Modifier.width(4.dp))
+                                              Text("اتصال", fontSize = 11.sp)
+                                          }
+                                          Spacer(modifier = Modifier.width(6.dp))
+                                      }
+
+                                      if (order.status == "pending") {
+                                          TextButton(onClick = {
+                                              scope.launch {
+                                                  repository.firestore.collection("orders").document(order.id).delete()
+                                              }
+                                          }) {
+                                              Text("إلغاء الطلب", color = Color(0xFFF87171), fontSize = 11.sp)
+                                          }
+                                      } else if (order.status == "delivered") {
+                                          Button(
+                                              onClick = {
+                                                  scope.launch {
+                                                      repository.firestore.collection("orders").document(order.id).update("status", "completed")
+                                                  }
+                                              },
+                                              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                              shape = RoundedCornerShape(10.dp)
+                                          ) {
+                                              Text("تأكيد الاستلام", fontSize = 11.sp)
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+
+                          Column(
+                              modifier = Modifier.align(Alignment.BottomStart).padding(16.dp),
+                              verticalArrangement = Arrangement.spacedBy(8.dp)
+                          ) {
+                              FloatingActionButton(
+                                  onClick = { showReportModal = true },
+                                  containerColor = Color(0xFFDC2626),
+                                  contentColor = Color.White,
+                                  shape = CircleShape
+                              ) {
+                                  Icon(Icons.Default.Warning, contentDescription = "إبلاغ")
+                              }
+
+                              FloatingActionButton(
+                                  onClick = { showChatSheet = true },
+                                  containerColor = Color(0xFF2563EB),
+                                  contentColor = Color.White,
+                                  shape = CircleShape
+                              ) {
+                                  Icon(Icons.Default.Chat, contentDescription = "دردشة")
+                              }
+                          }
+                      }
+                  }
+              }
+
+              if (showNewOrderModal) {
+                  NewOrderDialog(
+                      repository = repository,
+                      userLocation = customerGeoPoint,
+                      onDismiss = { showNewOrderModal = false }
+                  )
+              }
+
+              if (showChatSheet && activeOrder != null) {
+                  ChatBottomSheet(
+                      orderId = activeOrder!!.id,
+                      userRole = "customer",
+                      repository = repository,
+                      onDismiss = { showChatSheet = false }
+                  )
+              }
+
+              if (showReportModal && activeOrder != null) {
+                  ReportDialog(
+                      targetUid = activeOrder!!.driverId,
+                      orderId = activeOrder!!.id,
+                      repository = repository,
+                      onDismiss = { showReportModal = false }
+                  )
+              }
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun DriverScreen(
+              repository: Repository,
+              audioAlertManager: AudioAlertManager,
+              onLogout: () -> Unit
+          ) {
+              val context = LocalContext.current
+              val scope = rememberCoroutineScope()
+              val uid = repository.currentUid ?: ""
+
+              var driverGeoPoint by remember { mutableStateOf(GeoPoint(36.4686, 2.6288)) }
+              val assignedOrder by repository.observeDriverAssignedOrder(uid).collectAsState(initial = null)
+              val pendingOrders by repository.observePendingOrders().collectAsState(initial = emptyList())
+              val currentUser by repository.observeCurrentUser(uid).collectAsState(initial = null)
+
+              var showChatSheet by remember { mutableStateOf(false) }
+              var showReportModal by remember { mutableStateOf(false) }
+
+              val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
+              val permLauncher = rememberLauncherForActivityResult(
+                  ActivityResultContracts.RequestMultiplePermissions()
+              ) { perms ->
+                  if (perms[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+                      fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                          if (loc != null) {
+                              driverGeoPoint = GeoPoint(loc.latitude, loc.longitude)
+                              scope.launch {
+                                  repository.updateDriverLocation(uid, loc.latitude, loc.longitude)
+                              }
+                          }
+                      }
+                  }
+              }
+
+              LaunchedEffect(Unit) {
+                  permLauncher.launch(
+                      arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                  )
+              }
+
+              LaunchedEffect(pendingOrders, assignedOrder) {
+                  if (pendingOrders.isNotEmpty() && assignedOrder == null) {
+                      audioAlertManager.startDriverOrderRingtone(this)
+                  } else {
+                      audioAlertManager.stopDriverOrderRingtone()
+                  }
+              }
+
+              Scaffold(
+                  topBar = {
+                      TopAppBar(
+                          title = { Text("لوحة عامل التوصيل", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                          actions = {
+                              IconButton(onClick = onLogout) {
+                                  Icon(Icons.Default.ExitToApp, contentDescription = "خروج", tint = Color.Red)
+                              }
+                          }
+                      )
+                  }
+              ) { padding ->
+                  Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                      OsmMapView(
+                          modifier = Modifier.fillMaxSize(),
+                          center = driverGeoPoint,
+                          markers = listOf(MapMarkerData(driverGeoPoint, "موقعي", "driver"))
+                      )
+
+                      Card(
+                          modifier = Modifier.fillMaxWidth().padding(12.dp).align(Alignment.TopCenter),
+                          shape = RoundedCornerShape(16.dp),
+                          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                      ) {
+                          Row(
+                              modifier = Modifier.fillMaxWidth().padding(12.dp),
+                              horizontalArrangement = Arrangement.SpaceAround
+                          ) {
+                              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                  Text("الدين الحالي", fontSize = 10.sp, color = Color.Gray)
+                                  Text("${currentUser?.debt?.toInt() ?: 0} دج", fontWeight = FontWeight.Black, color = Color.Red)
+                              }
+                              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                  Text("الحالة", fontSize = 10.sp, color = Color.Gray)
+                                  Text(if (currentUser?.blocked == true) "مجمد" else "جاهز للعمل", fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                              }
+                          }
+                      }
+
+                      if (pendingOrders.isNotEmpty() && assignedOrder == null) {
+                          val incoming = pendingOrders.first()
+                          Card(
+                              modifier = Modifier.fillMaxWidth(0.92f).align(Alignment.Center).padding(16.dp),
+                              shape = RoundedCornerShape(24.dp),
+                              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                              elevation = CardDefaults.cardElevation(16.dp)
+                          ) {
+                              Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                  Text("🔔 طلب توصيل جديد!", fontWeight = FontWeight.Black, fontSize = 18.sp, color = PrimaryOrange)
+                                  Spacer(modifier = Modifier.height(10.dp))
+                                  Text("المطعم: ${incoming.restaurant}", fontWeight = FontWeight.Bold)
+                                  Text("عنوان الزبون: ${incoming.customerAddress}", fontSize = 12.sp, color = Color.Gray)
+                                  Spacer(modifier = Modifier.height(6.dp))
+                                  Text("قيمة التوصيل: ${incoming.price} دج", fontWeight = FontWeight.Black, fontSize = 16.sp, color = Color(0xFF10B981))
+                                  Spacer(modifier = Modifier.height(16.dp))
+
+                                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                      Button(
+                                          onClick = {
+                                              audioAlertManager.stopDriverOrderRingtone()
+                                              scope.launch {
+                                                  repository.firestore.collection("orders").document(incoming.id).update(
+                                                      mapOf(
+                                                          "status" to "accepted",
+                                                          "driverId" to uid,
+                                                          "driverName" to (currentUser?.name ?: "عامل التوصيل"),
+                                                          "driverPhone" to (currentUser?.phoneNumber ?: "")
+                                                      )
+                                                  )
+                                              }
+                                          },
+                                          modifier = Modifier.weight(1f),
+                                          colors = ButtonDefaults.buttonColors(containerColor = PrimaryOrange),
+                                          shape = RoundedCornerShape(12.dp)
+                                      ) {
+                                          Text("قبول")
+                                      }
+                                  }
+                              }
+                          }
+                      }
+
+                      assignedOrder?.let { order ->
+                          Card(
+                              modifier = Modifier.fillMaxWidth().padding(12.dp).align(Alignment.BottomCenter),
+                              shape = RoundedCornerShape(20.dp),
+                              colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                              elevation = CardDefaults.cardElevation(10.dp)
+                          ) {
+                              Column(modifier = Modifier.padding(16.dp)) {
+                                  Row(
+                                      modifier = Modifier.fillMaxWidth(),
+                                      horizontalArrangement = Arrangement.SpaceBetween,
+                                      verticalAlignment = Alignment.CenterVertically
+                                  ) {
+                                      Text("الطلب قيد التوصيل: ${order.restaurant}", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                      Button(
+                                          onClick = {
+                                              val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${order.customerPhone}"))
+                                              context.startActivity(intent)
+                                          },
+                                          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                                          shape = RoundedCornerShape(10.dp)
+                                      ) {
+                                          Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp))
+                                          Spacer(modifier = Modifier.width(4.dp))
+                                          Text("اتصل بالزبون", fontSize = 11.sp)
+                                      }
+                                  }
+
+                                  Spacer(modifier = Modifier.height(12.dp))
+
+                                  Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                      Button(
+                                          onClick = {
+                                              scope.launch {
+                                                  repository.firestore.collection("orders").document(order.id).update("status", "to_store")
+                                              }
+                                          },
+                                          modifier = Modifier.weight(1f),
+                                          shape = RoundedCornerShape(8.dp),
+                                          colors = ButtonDefaults.buttonColors(containerColor = if (order.status == "to_store") PrimaryOrange else Color.DarkGray)
+                                      ) {
+                                          Text("في الطريق للمطعم", fontSize = 10.sp)
+                                      }
+
+                                      Button(
+                                          onClick = {
+                                              scope.launch {
+                                                  repository.firestore.collection("orders").document(order.id).update("status", "received")
+                                              }
+                                          },
+                                          modifier = Modifier.weight(1f),
+                                          shape = RoundedCornerShape(8.dp),
+                                          colors = ButtonDefaults.buttonColors(containerColor = if (order.status == "received") PrimaryOrange else Color.DarkGray)
+                                      ) {
+                                          Text("استلمت الطلب", fontSize = 10.sp)
+                                      }
+
+                                      Button(
+                                          onClick = {
+                                              scope.launch {
+                                                  val dist = repository.calculateDistanceKm(order.storeLat, order.storeLng, order.lat, order.lng)
+                                                  val addedDebt = dist * 10.0
+                                                  val newTotalDebt = (currentUser?.debt ?: 0.0) + addedDebt
+
+                                                  repository.firestore.collection("orders").document(order.id).update("status", "delivered")
+                                                  repository.firestore.collection("users").document(uid).update(
+                                                      mapOf(
+                                                          "debt" to newTotalDebt,
+                                                          "blocked" to (newTotalDebt >= 1000)
+                                                      )
+                                                  )
+                                              }
+                                          },
+                                          modifier = Modifier.weight(1f),
+                                          shape = RoundedCornerShape(8.dp),
+                                          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                                      ) {
+                                          Text("تم التسليم", fontSize = 10.sp)
+                                      }
+                                  }
+                              }
+                          }
+
+                          Column(
+                              modifier = Modifier.align(Alignment.CenterStart).padding(16.dp),
+                              verticalArrangement = Arrangement.spacedBy(8.dp)
+                          ) {
+                              FloatingActionButton(
+                                  onClick = { showReportModal = true },
+                                  containerColor = Color(0xFFDC2626),
+                                  contentColor = Color.White,
+                                  shape = CircleShape
+                              ) {
+                                  Icon(Icons.Default.Warning, contentDescription = "إبلاغ")
+                              }
+
+                              FloatingActionButton(
+                                  onClick = { showChatSheet = true },
+                                  containerColor = Color(0xFF2563EB),
+                                  contentColor = Color.White,
+                                  shape = CircleShape
+                              ) {
+                                  Icon(Icons.Default.Chat, contentDescription = "دردشة")
+                              }
+                          }
+                      }
+                  }
+              }
+
+              if (showChatSheet && assignedOrder != null) {
+                  ChatBottomSheet(
+                      orderId = assignedOrder!!.id,
+                      userRole = "driver",
+                      repository = repository,
+                      onDismiss = { showChatSheet = false }
+                  )
+              }
+
+              if (showReportModal && assignedOrder != null) {
+                  ReportDialog(
+                      targetUid = assignedOrder!!.customerId,
+                      orderId = assignedOrder!!.id,
+                      repository = repository,
+                      onDismiss = { showReportModal = false }
+                  )
+              }
+          }
+
+          @Composable
+          fun AdminLoginScreen(
+              repository: Repository,
+              onSuccess: () -> Unit
+          ) {
+              val context = LocalContext.current
+              var username by remember { mutableStateOf("") }
+              var password by remember { mutableStateOf("") }
+
+              Column(
+                  modifier = Modifier.fillMaxSize().padding(24.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  verticalArrangement = Arrangement.Center
+              ) {
+                  Text("بوابة إدارة النظام", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                  Spacer(modifier = Modifier.height(16.dp))
+                  OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("اسم المستخدم") })
+                  Spacer(modifier = Modifier.height(8.dp))
+                  OutlinedTextField(
+                      value = password,
+                      onValueChange = { password = it },
+                      label = { Text("كلمة المرور") },
+                      visualTransformation = PasswordVisualTransformation()
+                  )
+                  Spacer(modifier = Modifier.height(16.dp))
+                  Button(
+                      onClick = {
+                          if (username == "admin009" && repository.verifyAdminPassword(password)) {
+                              onSuccess()
+                          } else {
+                              Toast.makeText(context, "بيانات الدخول غير صحيحة", Toast.LENGTH_SHORT).show()
+                          }
+                      },
+                      colors = ButtonDefaults.buttonColors(containerColor = PrimaryOrange),
+                      shape = RoundedCornerShape(12.dp)
+                  ) {
+                      Text("تحقق وتفويض")
+                  }
+              }
+          }
+
+          @Composable
+          fun AdminDashboardScreen(
+              repository: Repository,
+              onExit: () -> Unit
+          ) {
+              val scope = rememberCoroutineScope()
+              var drivers by remember { mutableStateOf<List<User>>(emptyList()) }
+
+              LaunchedEffect(Unit) {
+                  repository.firestore.collection("users")
+                      .whereEqualTo("role", "driver")
+                      .addSnapshotListener { snap, _ ->
+                          drivers = snap?.documents?.mapNotNull { it.toObject(User::class.java) } ?: emptyList()
+                      }
+              }
+
+              Scaffold(
+                  topBar = {
+                      Row(
+                          modifier = Modifier.fillMaxWidth().padding(16.dp),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                      ) {
+                          Text("لوحة رقابة الإدارة", fontWeight = FontWeight.Black, fontSize = 18.sp)
+                          Button(onClick = onExit) { Text("خروج") }
+                      }
+                  }
+              ) { padding ->
+                  LazyColumn(modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp)) {
+                      item {
+                          Text("طلبات توظيف ومراجعة ديون عمال التوصيل", fontWeight = FontWeight.Bold)
+                          Spacer(modifier = Modifier.height(12.dp))
+                      }
+                      items(drivers) { driver ->
+                          Card(
+                              modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                              shape = RoundedCornerShape(14.dp)
+                          ) {
+                              Row(
+                                  modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                  horizontalArrangement = Arrangement.SpaceBetween,
+                                  verticalAlignment = Alignment.CenterVertically
+                              ) {
+                                  Column {
+                                      Text(driver.name, fontWeight = FontWeight.Bold)
+                                      Text(driver.phoneNumber, fontSize = 11.sp, color = Color.Gray)
+                                      Text("الدين: ${driver.debt.toInt()} دج", color = Color.Red, fontSize = 11.sp)
+                                  }
+
+                                  Row {
+                                      if (!driver.approved) {
+                                          Button(
+                                              onClick = {
+                                                  scope.launch {
+                                                      repository.firestore.collection("users").document(driver.uid).update("approved", true)
+                                                  }
+                                              },
+                                              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
+                                          ) {
+                                              Text("تفعيل وقبول", fontSize = 10.sp)
+                                          }
+                                      } else {
+                                          Button(
+                                              onClick = {
+                                                  scope.launch {
+                                                      repository.firestore.collection("users").document(driver.uid).update(
+                                                          mapOf("debt" to 0.0, "blocked" to false)
+                                                      )
+                                                  }
+                                              }
+                                          ) {
+                                              Text("تصفير الدين", fontSize = 10.sp)
+                                          }
+                                      }
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          # MainActivity.kt
+          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/MainActivity.kt
+          package com.elaffroun.delivery
+
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.compose.setContent
+          import androidx.compose.foundation.isSystemInDarkTheme
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.navigation.compose.NavHost
+          import androidx.navigation.compose.composable
+          import androidx.navigation.compose.rememberNavController
+          import com.elaffroun.delivery.data.AudioAlertManager
+          import com.elaffroun.delivery.data.Repository
+          import com.elaffroun.delivery.data.User
+          import com.elaffroun.delivery.ui.components.*
+          import com.elaffroun.delivery.ui.screens.*
+          import com.elaffroun.delivery.ui.theme.*
+          import org.osmdroid.config.Configuration
+
+          class MainActivity : ComponentActivity() {
+
+              private lateinit var audioAlertManager: AudioAlertManager
+              private val repository = Repository()
+
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+
+                  Configuration.getInstance().userAgentValue = BuildConfig.APPLICATION_ID
+                  audioAlertManager = AudioAlertManager(this)
+
+                  setContent {
+                      val isDark = isSystemInDarkTheme()
+                      val colors = if (isDark) {
+                          darkColorScheme(
+                              primary = PrimaryOrange,
+                              background = DarkBackground,
+                              surface = DarkSurface
+                          )
+                      } else {
+                          lightColorScheme(
+                              primary = PrimaryOrange,
+                              background = LightBackground,
+                              surface = LightSurface
+                          )
+                      }
+
+                      MaterialTheme(colorScheme = colors) {
+                          Surface(modifier = Modifier.fillMaxSize()) {
+                              MainNavigation(repository, audioAlertManager)
+                          }
+                      }
+                  }
+              }
+
+              override fun onDestroy() {
+                  super.onDestroy()
+                  audioAlertManager.release()
+              }
+          }
+
+          @Composable
+          fun MainNavigation(repository: Repository, audioAlertManager: AudioAlertManager) {
+              val navController = rememberNavController()
+              var currentUserState by remember { mutableStateOf<User?>(null) }
+
+              LaunchedEffect(repository.auth.currentUser) {
+                  val uid = repository.auth.currentUser?.uid
+                  if (uid != null) {
+                      repository.observeCurrentUser(uid).collect { user ->
+                          currentUserState = user
+                          if (user != null) {
+                              if (user.blocked) {
+                                  navController.navigate("blocked") { popUpTo(0) }
+                              } else if (user.role == "driver") {
+                                  if (!user.approved) {
+                                      navController.navigate("pending_approval") { popUpTo(0) }
+                                  } else {
+                                      navController.navigate("driver_dashboard") { popUpTo(0) }
+                                  }
+                              } else {
+                                  navController.navigate("customer_dashboard") { popUpTo(0) }
+                              }
+                          }
+                      }
+                  } else {
+                      navController.navigate("landing") { popUpTo(0) }
+                  }
+              }
+
+              NavHost(navController = navController, startDestination = "landing") {
+                  composable("landing") {
+                      LandingScreen(
+                          onLoginClick = { navController.navigate("auth/login") },
+                          onRegisterClick = { navController.navigate("auth/register") },
+                          onAdminPortalClick = { navController.navigate("admin_login") }
+                      )
+                  }
+                  composable("auth/{mode}") { backStackEntry ->
+                      val mode = backStackEntry.arguments?.getString("mode") ?: "login"
+                      AuthScreen(
+                          initialMode = mode,
+                          repository = repository,
+                          onAuthSuccess = { }
+                      )
+                  }
+                  composable("customer_dashboard") {
+                      CustomerScreen(
+                          repository = repository,
+                          audioAlertManager = audioAlertManager,
+                          onLogout = {
+                              repository.auth.signOut()
+                              navController.navigate("landing") { popUpTo(0) }
+                          }
+                      )
+                  }
+                  composable("driver_dashboard") {
+                      DriverScreen(
+                          repository = repository,
+                          audioAlertManager = audioAlertManager,
+                          onLogout = {
+                              repository.auth.signOut()
+                              navController.navigate("landing") { popUpTo(0) }
+                          }
+                      )
+                  }
+                  composable("admin_login") {
+                      AdminLoginScreen(
+                          repository = repository,
+                          onSuccess = { navController.navigate("admin_dashboard") { popUpTo("landing") } }
+                      )
+                  }
+                  composable("admin_dashboard") {
+                      AdminDashboardScreen(
+                          repository = repository,
+                          onExit = { navController.navigate("landing") { popUpTo(0) } }
+                      )
+                  }
+                  composable("blocked") {
+                      BlockedScreen(
+                          reason = currentUserState?.blockedReason ?: "",
+                          onLogout = {
+                              repository.auth.signOut()
+                              navController.navigate("landing") { popUpTo(0) }
+                          }
+                      )
+                  }
+                  composable("pending_approval") {
+                      PendingApprovalScreen(
+                          onLogout = {
+                              repository.auth.signOut()
+                              navController.navigate("landing") { popUpTo(0) }
+                          }
+                      )
+                  }
+              }
+          }
+          EOF
+
+          echo "=== 6. Initializing Gradle Wrapper ==="
+          gradle wrapper --gradle-version 8.6
+
+      - name: Build Android APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Elaffroun-Delivery-Native-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+
