@@ -25,6 +25,8 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: false
 
       - name: Scaffold Android Native Project
         run: |
@@ -35,8 +37,25 @@ jobs:
           mkdir -p app/src/main/java/com/elaffroun/delivery/ui/screens
           mkdir -p app/src/main/java/com/elaffroun/delivery/ui/theme
           mkdir -p app/src/main/res/values
+          mkdir -p app/src/main/res/drawable
 
-          echo "=== 2. Generating Gradle & Project Root Configurations ==="
+          echo "=== 2. Generating Vector Icon (Fixing AAPT2 Private Resource Error) ==="
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher_foreground.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#FF7E00"
+                  android:pathData="M0,0h108v108h-108z"/>
+              <path
+                  android:fillColor="#FFFFFF"
+                  android:pathData="M54,34c-11,0 -20,9 -20,20s9,20 20,20 20,-9 20,-20 -9,-20 -20,-20zM54,66c-6.6,0 -12,-5.4 -12,-12s5.4,-12 12,-12 12,5.4 12,12 -5.4,12 -12,12z"/>
+          </vector>
+          EOF
+
+          echo "=== 3. Generating Gradle Root Configurations ==="
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -161,7 +180,7 @@ jobs:
           }
           EOF
 
-          echo "=== 3. Generating Firebase Config ==="
+          echo "=== 4. Generating Firebase Configuration ==="
           cat << 'EOF' > app/google-services.json
           {
             "project_info": {
@@ -194,7 +213,7 @@ jobs:
           }
           EOF
 
-          echo "=== 4. Generating Manifest & Resources ==="
+          echo "=== 5. Generating Android Manifest & Safe Resources ==="
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
@@ -208,9 +227,9 @@ jobs:
               <application
                   android:name=".ElaffrounApp"
                   android:allowBackup="true"
-                  android:icon="@android:drawable/sym_def_app_icon"
-                  android:label="العفرون ديليفري"
-                  android:roundIcon="@android:drawable/sym_def_app_icon"
+                  android:icon="@drawable/ic_launcher_foreground"
+                  android:label="@string/app_name"
+                  android:roundIcon="@drawable/ic_launcher_foreground"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.ElaffrounDelivery">
                   
@@ -245,7 +264,7 @@ jobs:
           </resources>
           EOF
 
-          echo "=== 5. Writing Kotlin Source Code ==="
+          echo "=== 6. Writing Kotlin Source Code ==="
 
           # ElaffrounApp.kt
           cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ElaffrounApp.kt
@@ -386,10 +405,10 @@ jobs:
                       while (isActive) {
                           toneGenerator?.startTone(ToneGenerator.TONE_CDMA_HIGH_L, 300)
                           if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                              vibrator.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
+                              vibrator.vibrate(VibrationEffect.createOneShot(300L, VibrationEffect.DEFAULT_AMPLITUDE))
                           } else {
                               @Suppress("DEPRECATION")
-                              vibrator.vibrate(300)
+                              vibrator.vibrate(300L)
                           }
                           delay(1200)
                       }
@@ -405,10 +424,10 @@ jobs:
               fun playArrivalProximityAlert() {
                   toneGenerator?.startTone(ToneGenerator.TONE_PROP_BEEP2, 450)
                   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                      vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 250, 150, 250), -1))
+                      vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0L, 250L, 150L, 250L), -1))
                   } else {
                       @Suppress("DEPRECATION")
-                      vibrator.vibrate(450)
+                      vibrator.vibrate(450L)
                   }
               }
 
@@ -2069,13 +2088,13 @@ jobs:
           }
           EOF
 
-          echo "=== 6. Initializing Gradle Wrapper ==="
+          echo "=== 7. Initializing Gradle Wrapper ==="
           gradle wrapper --gradle-version 8.6
 
       - name: Build Android APK
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --info
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
