@@ -1,3 +1,5 @@
+
+
 name: Build Android Native APK
 
 on:
@@ -141,6 +143,7 @@ jobs:
           dependencies {
               val composeBom = platform("androidx.compose:compose-bom:2024.04.01")
               implementation(composeBom)
+              implementation("androidx.activity:activity-compose:1.8.2")
               implementation("androidx.compose.ui:ui")
               implementation("androidx.compose.material3:material3")
               implementation("androidx.compose.material:material-icons-extended")
@@ -159,7 +162,7 @@ jobs:
           }
           EOF
 
-          echo "=== 3. Generating Firebase Google Services Config ==="
+          echo "=== 3. Generating Firebase Config ==="
           cat << 'EOF' > app/google-services.json
           {
             "project_info": {
@@ -637,7 +640,7 @@ jobs:
                       mapView.overlays.removeAll { it is Marker || it is Polyline }
 
                       if (routePoints.isNotEmpty()) {
-                          val polyline = Polyline().apply {
+                          val polyline = Polyline(mapView).apply {
                               setPoints(routePoints)
                               outlinePaint.color = android.graphics.Color.parseColor("#FF7E00")
                               outlinePaint.strokeWidth = 10f
@@ -1685,6 +1688,69 @@ jobs:
                       repository = repository,
                       onDismiss = { showReportModal = false }
                   )
+              }
+          }
+
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun ChatBottomSheet(
+              orderId: String,
+              userRole: String,
+              repository: Repository,
+              onDismiss: () -> Unit
+          ) {
+              val messages by repository.observeChatMessages(orderId).collectAsState(initial = emptyList())
+              var inputText by remember { mutableStateOf("") }
+              val scope = rememberCoroutineScope()
+
+              ModalBottomSheet(onDismissRequest = onDismiss) {
+                  Column(
+                      modifier = Modifier.fillMaxWidth().height(420.dp).padding(16.dp)
+                  ) {
+                      Text("محادثة الطلب المباشرة", style = MaterialTheme.typography.titleMedium)
+                      Spacer(modifier = Modifier.height(8.dp))
+
+                      LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                          items(messages) { msg ->
+                              val isMe = msg.sender == userRole
+                              Box(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
+                              ) {
+                                  Box(
+                                      modifier = Modifier
+                                          .padding(vertical = 4.dp)
+                                          .background(if (isMe) PrimaryOrange else Color.Gray.copy(alpha = 0.3f), shape = RoundedCornerShape(12.dp))
+                                          .padding(horizontal = 12.dp, vertical = 8.dp)
+                                  ) {
+                                      Text(text = msg.text, color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                                  }
+                              }
+                          }
+                      }
+
+                      Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                          OutlinedTextField(
+                              value = inputText,
+                              onValueChange = { inputText = it },
+                              modifier = Modifier.weight(1f),
+                              placeholder = { Text("اكتب رسالة...") },
+                              shape = RoundedCornerShape(12.dp)
+                          )
+                          Spacer(modifier = Modifier.width(8.dp))
+                          IconButton(
+                              onClick = {
+                                  if (inputText.isNotBlank()) {
+                                      val txt = inputText
+                                      inputText = ""
+                                      scope.launch { repository.sendMessage(orderId, txt, userRole) }
+                                  }
+                              }
+                          ) {
+                              Icon(Icons.Default.Send, contentDescription = "Send", tint = PrimaryOrange)
+                          }
+                      }
+                  }
               }
           }
 
