@@ -1,5 +1,4 @@
 
-
 name: Build Android Native APK
 
 on:
@@ -640,11 +639,10 @@ jobs:
                       mapView.overlays.removeAll { it is Marker || it is Polyline }
 
                       if (routePoints.isNotEmpty()) {
-                          val polyline = Polyline(mapView).apply {
-                              setPoints(routePoints)
-                              outlinePaint.color = android.graphics.Color.parseColor("#FF7E00")
-                              outlinePaint.strokeWidth = 10f
-                          }
+                          val polyline = Polyline(mapView)
+                          polyline.setPoints(routePoints)
+                          polyline.outlinePaint.color = android.graphics.Color.parseColor("#FF7E00")
+                          polyline.outlinePaint.strokeWidth = 10f
                           mapView.overlays.add(polyline)
                       }
 
@@ -959,6 +957,7 @@ jobs:
           import com.elaffroun.delivery.ui.theme.PrimaryOrange
           import com.google.android.gms.location.LocationServices
           import kotlinx.coroutines.launch
+          import kotlinx.coroutines.tasks.await
           import org.osmdroid.util.GeoPoint
           import java.text.SimpleDateFormat
           import java.util.*
@@ -1167,9 +1166,9 @@ jobs:
                           scope.launch {
                               try {
                                   if (isLogin) {
-                                      repository.auth.signInWithEmailAndPassword(email, password)
+                                      repository.auth.signInWithEmailAndPassword(email, password).await()
                                   } else {
-                                      val res = repository.auth.createUserWithEmailAndPassword(email, password)
+                                      val res = repository.auth.createUserWithEmailAndPassword(email, password).await()
                                       val uid = res.user?.uid ?: ""
                                       val newUser = User(
                                           uid = uid,
@@ -1180,7 +1179,7 @@ jobs:
                                           approved = (role != "driver"),
                                           createdAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
                                       )
-                                      repository.firestore.collection("users").document(uid).set(newUser)
+                                      repository.firestore.collection("users").document(uid).set(newUser).await()
                                   }
                                   onAuthSuccess()
                               } catch (e: Exception) {
@@ -1357,7 +1356,7 @@ jobs:
                                       if (order.status == "pending") {
                                           TextButton(onClick = {
                                               scope.launch {
-                                                  repository.firestore.collection("orders").document(order.id).delete()
+                                                  repository.firestore.collection("orders").document(order.id).delete().await()
                                               }
                                           }) {
                                               Text("إلغاء الطلب", color = Color(0xFFF87171), fontSize = 11.sp)
@@ -1366,7 +1365,7 @@ jobs:
                                           Button(
                                               onClick = {
                                                   scope.launch {
-                                                      repository.firestore.collection("orders").document(order.id).update("status", "completed")
+                                                      repository.firestore.collection("orders").document(order.id).update("status", "completed").await()
                                                   }
                                               },
                                               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
@@ -1549,7 +1548,7 @@ jobs:
                                                           "driverName" to (currentUser?.name ?: "عامل التوصيل"),
                                                           "driverPhone" to (currentUser?.phoneNumber ?: "")
                                                       )
-                                                  )
+                                                  ).await()
                                               }
                                           },
                                           modifier = Modifier.weight(1f),
@@ -1597,7 +1596,7 @@ jobs:
                                       Button(
                                           onClick = {
                                               scope.launch {
-                                                  repository.firestore.collection("orders").document(order.id).update("status", "to_store")
+                                                  repository.firestore.collection("orders").document(order.id).update("status", "to_store").await()
                                               }
                                           },
                                           modifier = Modifier.weight(1f),
@@ -1610,7 +1609,7 @@ jobs:
                                       Button(
                                           onClick = {
                                               scope.launch {
-                                                  repository.firestore.collection("orders").document(order.id).update("status", "received")
+                                                  repository.firestore.collection("orders").document(order.id).update("status", "received").await()
                                               }
                                           },
                                           modifier = Modifier.weight(1f),
@@ -1627,13 +1626,13 @@ jobs:
                                                   val addedDebt = dist * 10.0
                                                   val newTotalDebt = (currentUser?.debt ?: 0.0) + addedDebt
 
-                                                  repository.firestore.collection("orders").document(order.id).update("status", "delivered")
+                                                  repository.firestore.collection("orders").document(order.id).update("status", "delivered").await()
                                                   repository.firestore.collection("users").document(uid).update(
                                                       mapOf(
                                                           "debt" to newTotalDebt,
                                                           "blocked" to (newTotalDebt >= 1000)
                                                       )
-                                                  )
+                                                  ).await()
                                               }
                                           },
                                           modifier = Modifier.weight(1f),
@@ -1849,7 +1848,7 @@ jobs:
                                           Button(
                                               onClick = {
                                                   scope.launch {
-                                                      repository.firestore.collection("users").document(driver.uid).update("approved", true)
+                                                      repository.firestore.collection("users").document(driver.uid).update("approved", true).await()
                                                   }
                                               },
                                               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
@@ -1862,7 +1861,7 @@ jobs:
                                                   scope.launch {
                                                       repository.firestore.collection("users").document(driver.uid).update(
                                                           mapOf("debt" to 0.0, "blocked" to false)
-                                                      )
+                                                      ).await()
                                                   }
                                               }
                                           ) {
@@ -1909,7 +1908,7 @@ jobs:
               override fun onCreate(savedInstanceState: Bundle?) {
                   super.onCreate(savedInstanceState)
 
-                  Configuration.getInstance().userAgentValue = BuildConfig.APPLICATION_ID
+                  Configuration.getInstance().userAgentValue = "com.elaffroun.delivery"
                   audioAlertManager = AudioAlertManager(this)
 
                   setContent {
@@ -1954,20 +1953,34 @@ jobs:
                           currentUserState = user
                           if (user != null) {
                               if (user.blocked) {
-                                  navController.navigate("blocked") { popUpTo(0) }
+                                  navController.navigate("blocked") {
+                                      popUpTo("landing") { inclusive = false }
+                                      launchSingleTop = true
+                                  }
                               } else if (user.role == "driver") {
                                   if (!user.approved) {
-                                      navController.navigate("pending_approval") { popUpTo(0) }
+                                      navController.navigate("pending_approval") {
+                                          popUpTo("landing") { inclusive = false }
+                                          launchSingleTop = true
+                                      }
                                   } else {
-                                      navController.navigate("driver_dashboard") { popUpTo(0) }
+                                      navController.navigate("driver_dashboard") {
+                                          popUpTo("landing") { inclusive = false }
+                                          launchSingleTop = true
+                                      }
                                   }
                               } else {
-                                  navController.navigate("customer_dashboard") { popUpTo(0) }
+                                  navController.navigate("customer_dashboard") {
+                                      popUpTo("landing") { inclusive = false }
+                                      launchSingleTop = true
+                                  }
                               }
                           }
                       }
                   } else {
-                      navController.navigate("landing") { popUpTo(0) }
+                      navController.navigate("landing") {
+                          popUpTo("landing") { inclusive = true }
+                      }
                   }
               }
 
@@ -1993,7 +2006,9 @@ jobs:
                           audioAlertManager = audioAlertManager,
                           onLogout = {
                               repository.auth.signOut()
-                              navController.navigate("landing") { popUpTo(0) }
+                              navController.navigate("landing") {
+                                  popUpTo("landing") { inclusive = true }
+                              }
                           }
                       )
                   }
@@ -2003,20 +2018,30 @@ jobs:
                           audioAlertManager = audioAlertManager,
                           onLogout = {
                               repository.auth.signOut()
-                              navController.navigate("landing") { popUpTo(0) }
+                              navController.navigate("landing") {
+                                  popUpTo("landing") { inclusive = true }
+                              }
                           }
                       )
                   }
                   composable("admin_login") {
                       AdminLoginScreen(
                           repository = repository,
-                          onSuccess = { navController.navigate("admin_dashboard") { popUpTo("landing") } }
+                          onSuccess = {
+                              navController.navigate("admin_dashboard") {
+                                  popUpTo("landing") { inclusive = false }
+                              }
+                          }
                       )
                   }
                   composable("admin_dashboard") {
                       AdminDashboardScreen(
                           repository = repository,
-                          onExit = { navController.navigate("landing") { popUpTo(0) } }
+                          onExit = {
+                              navController.navigate("landing") {
+                                  popUpTo("landing") { inclusive = true }
+                              }
+                          }
                       )
                   }
                   composable("blocked") {
@@ -2024,7 +2049,9 @@ jobs:
                           reason = currentUserState?.blockedReason ?: "",
                           onLogout = {
                               repository.auth.signOut()
-                              navController.navigate("landing") { popUpTo(0) }
+                              navController.navigate("landing") {
+                                  popUpTo("landing") { inclusive = true }
+                              }
                           }
                       )
                   }
@@ -2032,7 +2059,9 @@ jobs:
                       PendingApprovalScreen(
                           onLogout = {
                               repository.auth.signOut()
-                              navController.navigate("landing") { popUpTo(0) }
+                              navController.navigate("landing") {
+                                  popUpTo("landing") { inclusive = true }
+                              }
                           }
                       )
                   }
