@@ -1,11 +1,3 @@
-الخطأ الظاهر في لقطات الشاشة سببه انقطاع إنشاء كود MainActivity.kt في منتصفه في
-المرة السابقة مما تسبب في خطأ برمجي (Syntax Error) أثناء تصريف
-compileDebugKotlin، بالإضافة إلى تكرار تعريف شاشات الواجهة (Duplicate Class
-Definitions) ونقص استدعاء .await() غير المتزامن لبيانات الـ Firestore.
-
-إليك ملف .github/workflows/build-apk.yml مصححاً بالكامل، موحّداً، وخالياً من أي
-نقص أو تكرار، جاهز للنسخ والتشغيل المباشر:
-
 name: Build Android Native APK
 
 on:
@@ -1696,69 +1688,6 @@ jobs:
               }
           }
 
-          @OptIn(ExperimentalMaterial3Api::class)
-          @Composable
-          fun ChatBottomSheet(
-              orderId: String,
-              userRole: String,
-              repository: Repository,
-              onDismiss: () -> Unit
-          ) {
-              val messages by repository.observeChatMessages(orderId).collectAsState(initial = emptyList())
-              var inputText by remember { mutableStateOf("") }
-              val scope = rememberCoroutineScope()
-
-              ModalBottomSheet(onDismissRequest = onDismiss) {
-                  Column(
-                      modifier = Modifier.fillMaxWidth().height(420.dp).padding(16.dp)
-                  ) {
-                      Text("محادثة الطلب المباشرة", style = MaterialTheme.typography.titleMedium)
-                      Spacer(modifier = Modifier.height(8.dp))
-
-                      LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                          items(messages) { msg ->
-                              val isMe = msg.sender == userRole
-                              Box(
-                                  modifier = Modifier.fillMaxWidth(),
-                                  contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
-                              ) {
-                                  Box(
-                                      modifier = Modifier
-                                          .padding(vertical = 4.dp)
-                                          .background(if (isMe) PrimaryOrange else Color.Gray.copy(alpha = 0.3f), shape = RoundedCornerShape(12.dp))
-                                          .padding(horizontal = 12.dp, vertical = 8.dp)
-                                  ) {
-                                      Text(text = msg.text, color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
-                                  }
-                              }
-                          }
-                      }
-
-                      Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                          OutlinedTextField(
-                              value = inputText,
-                              onValueChange = { inputText = it },
-                              modifier = Modifier.weight(1f),
-                              placeholder = { Text("اكتب رسالة...") },
-                              shape = RoundedCornerShape(12.dp)
-                          )
-                          Spacer(modifier = Modifier.width(8.dp))
-                          IconButton(
-                              onClick = {
-                                  if (inputText.isNotBlank()) {
-                                      val txt = inputText
-                                      inputText = ""
-                                      scope.launch { repository.sendMessage(orderId, txt, userRole) }
-                                  }
-                              }
-                          ) {
-                              Icon(Icons.Default.Send, contentDescription = "Send", tint = PrimaryOrange)
-                          }
-                      }
-                  }
-              }
-          }
-
           @Composable
           fun AdminLoginScreen(
               repository: Repository,
@@ -2058,13 +1987,3 @@ jobs:
         with:
           name: Elaffroun-Delivery-Native-APK
           path: app/build/outputs/apk/debug/app-debug.apk
-
-ما تم تصحيحه لحل الـ Failure:
-
-1.  إكمال ملف MainActivity.kt حتى آخره: تم إغلاق جميع الأقواس وتفادي البتر الذي
-    أوقف الـ Gradle سابقاً.
-2.  إزالة التكرار الصريح (No Duplicate Declarations): تم تجميع الشاشات في ملف
-    Screens.kt وإلغاء توليد الشاشات بشكل منفرد لمنع خطأ Conflicting overloads
-    الذي يعطل مترجم Kotlin.
-3.  تصحيح استدعاءات Firestore المتزامنة: تم إضافة .await() عند جلب بيانات
-    المستخدم داخل NewOrderDialog في ملف Dialogs.kt.
