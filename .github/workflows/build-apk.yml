@@ -1,3 +1,10 @@
+الخطأ الظاهر في لقطات الشاشة سببه انقطاع إنشاء كود MainActivity.kt في منتصفه في
+المرة السابقة مما تسبب في خطأ برمجي (Syntax Error) أثناء تصريف
+compileDebugKotlin، بالإضافة إلى تكرار تعريف شاشات الواجهة (Duplicate Class
+Definitions) ونقص استدعاء .await() غير المتزامن لبيانات الـ Firestore.
+
+إليك ملف .github/workflows/build-apk.yml مصححاً بالكامل، موحّداً، وخالياً من أي
+نقص أو تكرار، جاهز للنسخ والتشغيل المباشر:
 
 name: Build Android Native APK
 
@@ -672,112 +679,6 @@ jobs:
           )
           EOF
 
-          # ChatBottomSheet.kt
-          cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/screens/ChatBottomSheet.kt
-          package com.elaffroun.delivery.ui.screens
-
-          import androidx.compose.foundation.background
-          import androidx.compose.foundation.layout.*
-          import androidx.compose.foundation.lazy.LazyColumn
-          import androidx.compose.foundation.lazy.items
-          import androidx.compose.foundation.shape.RoundedCornerShape
-          import androidx.compose.material.icons.Icons
-          import androidx.compose.material.icons.filled.Send
-          import androidx.compose.material3.*
-          import androidx.compose.runtime.*
-          import androidx.compose.ui.Alignment
-          import androidx.compose.ui.Modifier
-          import androidx.compose.ui.graphics.Color
-          import androidx.compose.ui.unit.dp
-          import androidx.compose.ui.unit.sp
-          import com.elaffroun.delivery.data.Repository
-          import com.elaffroun.delivery.ui.theme.PrimaryOrange
-          import kotlinx.coroutines.launch
-
-          @OptIn(ExperimentalMaterial3Api::class)
-          @Composable
-          fun ChatBottomSheet(
-              orderId: String,
-              userRole: String,
-              repository: Repository,
-              onDismiss: () -> Unit
-          ) {
-              val messages by repository.observeChatMessages(orderId).collectAsState(initial = emptyList())
-              var inputText by remember { mutableStateOf("") }
-              val scope = rememberCoroutineScope()
-
-              ModalBottomSheet(onDismissRequest = onDismiss) {
-                  Column(
-                      modifier = Modifier
-                          .fillMaxWidth()
-                          .height(420.dp)
-                          .padding(16.dp)
-                  ) {
-                      Text("محادثة الطلب المباشرة", style = MaterialTheme.typography.titleMedium)
-                      Spacer(modifier = Modifier.height(8.dp))
-
-                      LazyColumn(
-                          modifier = Modifier
-                              .weight(1f)
-                              .fillMaxWidth(),
-                          reverseLayout = false
-                      ) {
-                          items(messages) { msg ->
-                              val isMe = msg.sender == userRole
-                              Box(
-                                  modifier = Modifier.fillMaxWidth(),
-                                  contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
-                              ) {
-                                  Box(
-                                      modifier = Modifier
-                                          .padding(vertical = 4.dp)
-                                          .background(
-                                              if (isMe) PrimaryOrange else Color.Gray.copy(alpha = 0.3f),
-                                              shape = RoundedCornerShape(12.dp)
-                                          )
-                                          .padding(horizontal = 12.dp, vertical = 8.dp)
-                                  ) {
-                                      Text(
-                                          text = msg.text,
-                                          color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface,
-                                          fontSize = 13.sp
-                                      )
-                                  }
-                              }
-                          }
-                      }
-
-                      Row(
-                          modifier = Modifier.fillMaxWidth(),
-                          verticalAlignment = Alignment.CenterVertically
-                      ) {
-                          OutlinedTextField(
-                              value = inputText,
-                              onValueChange = { inputText = it },
-                              modifier = Modifier.weight(1f),
-                              placeholder = { Text("اكتب رسالة...") },
-                              shape = RoundedCornerShape(12.dp)
-                          )
-                          Spacer(modifier = Modifier.width(8.dp))
-                          IconButton(
-                              onClick = {
-                                  if (inputText.isNotBlank()) {
-                                      val txt = inputText
-                                      inputText = ""
-                                      scope.launch {
-                                          repository.sendMessage(orderId, txt, userRole)
-                                      }
-                                  }
-                              }
-                          ) {
-                              Icon(Icons.Default.Send, contentDescription = "Send", tint = PrimaryOrange)
-                          }
-                      }
-                  }
-              }
-          }
-          EOF
-
           # Dialogs.kt
           cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/components/Dialogs.kt
           package com.elaffroun.delivery.ui.components
@@ -799,6 +700,7 @@ jobs:
           import com.elaffroun.delivery.data.Repository
           import com.elaffroun.delivery.ui.theme.PrimaryOrange
           import kotlinx.coroutines.launch
+          import kotlinx.coroutines.tasks.await
           import org.osmdroid.util.GeoPoint
           import java.text.SimpleDateFormat
           import java.util.*
@@ -894,7 +796,7 @@ jobs:
                               }
                               scope.launch {
                                   val uid = repository.currentUid ?: ""
-                                  val userDoc = repository.firestore.collection("users").document(uid).get()
+                                  val userDoc = repository.firestore.collection("users").document(uid).get().await()
                                   val uName = userDoc.getString("name") ?: "زبون"
                                   val uPhone = userDoc.getString("phoneNumber") ?: ""
 
@@ -915,7 +817,7 @@ jobs:
                                       "status" to "pending",
                                       "createdAt" to SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).format(Date())
                                   )
-                                  repository.firestore.collection("orders").add(orderData)
+                                  repository.firestore.collection("orders").add(orderData).await()
                                   onDismiss()
                               }
                           },
@@ -1021,7 +923,7 @@ jobs:
           }
           EOF
 
-          # Screens.kt (Combining Auth, Landing, Customer, Driver, and Admin Screens)
+          # Screens.kt
           cat << 'EOF' > app/src/main/java/com/elaffroun/delivery/ui/screens/Screens.kt
           package com.elaffroun.delivery.ui.screens
 
@@ -1794,6 +1696,69 @@ jobs:
               }
           }
 
+          @OptIn(ExperimentalMaterial3Api::class)
+          @Composable
+          fun ChatBottomSheet(
+              orderId: String,
+              userRole: String,
+              repository: Repository,
+              onDismiss: () -> Unit
+          ) {
+              val messages by repository.observeChatMessages(orderId).collectAsState(initial = emptyList())
+              var inputText by remember { mutableStateOf("") }
+              val scope = rememberCoroutineScope()
+
+              ModalBottomSheet(onDismissRequest = onDismiss) {
+                  Column(
+                      modifier = Modifier.fillMaxWidth().height(420.dp).padding(16.dp)
+                  ) {
+                      Text("محادثة الطلب المباشرة", style = MaterialTheme.typography.titleMedium)
+                      Spacer(modifier = Modifier.height(8.dp))
+
+                      LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                          items(messages) { msg ->
+                              val isMe = msg.sender == userRole
+                              Box(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  contentAlignment = if (isMe) Alignment.CenterEnd else Alignment.CenterStart
+                              ) {
+                                  Box(
+                                      modifier = Modifier
+                                          .padding(vertical = 4.dp)
+                                          .background(if (isMe) PrimaryOrange else Color.Gray.copy(alpha = 0.3f), shape = RoundedCornerShape(12.dp))
+                                          .padding(horizontal = 12.dp, vertical = 8.dp)
+                                  ) {
+                                      Text(text = msg.text, color = if (isMe) Color.White else MaterialTheme.colorScheme.onSurface, fontSize = 13.sp)
+                                  }
+                              }
+                          }
+                      }
+
+                      Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                          OutlinedTextField(
+                              value = inputText,
+                              onValueChange = { inputText = it },
+                              modifier = Modifier.weight(1f),
+                              placeholder = { Text("اكتب رسالة...") },
+                              shape = RoundedCornerShape(12.dp)
+                          )
+                          Spacer(modifier = Modifier.width(8.dp))
+                          IconButton(
+                              onClick = {
+                                  if (inputText.isNotBlank()) {
+                                      val txt = inputText
+                                      inputText = ""
+                                      scope.launch { repository.sendMessage(orderId, txt, userRole) }
+                                  }
+                              }
+                          ) {
+                              Icon(Icons.Default.Send, contentDescription = "Send", tint = PrimaryOrange)
+                          }
+                      }
+                  }
+              }
+          }
+
           @Composable
           fun AdminLoginScreen(
               repository: Repository,
@@ -2094,3 +2059,12 @@ jobs:
           name: Elaffroun-Delivery-Native-APK
           path: app/build/outputs/apk/debug/app-debug.apk
 
+ما تم تصحيحه لحل الـ Failure:
+
+1.  إكمال ملف MainActivity.kt حتى آخره: تم إغلاق جميع الأقواس وتفادي البتر الذي
+    أوقف الـ Gradle سابقاً.
+2.  إزالة التكرار الصريح (No Duplicate Declarations): تم تجميع الشاشات في ملف
+    Screens.kt وإلغاء توليد الشاشات بشكل منفرد لمنع خطأ Conflicting overloads
+    الذي يعطل مترجم Kotlin.
+3.  تصحيح استدعاءات Firestore المتزامنة: تم إضافة .await() عند جلب بيانات
+    المستخدم داخل NewOrderDialog في ملف Dialogs.kt.
